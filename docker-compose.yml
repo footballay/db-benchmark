@@ -1,0 +1,37 @@
+name: footballay-benchmark
+services:
+  postgres:
+    image: postgres:17.4
+    environment:
+      POSTGRES_DB: footballay_benchmark
+      POSTGRES_USER: benchmark
+      POSTGRES_PASSWORD: ${BENCH_PASSWORD:-footballay_benchmark_only}
+      TZ: UTC
+    ports:
+      - "127.0.0.1:${BENCH_PORT:-55432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    command: ["postgres", "-c", "timezone=UTC", "-c", "shared_buffers=256MB"]
+    shm_size: 512mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U benchmark -d footballay_benchmark"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+  flyway:
+    image: flyway/flyway:11.18.0
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../footballay-core/src/main/resources/db/migration:/flyway/sql:ro
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/footballay_benchmark
+      FLYWAY_USER: benchmark
+      FLYWAY_PASSWORD: ${BENCH_PASSWORD:-footballay_benchmark_only}
+      FLYWAY_BASELINE_ON_MIGRATE: "false"
+      FLYWAY_CLEAN_DISABLED: "true"
+    command: migrate
+volumes:
+  postgres_data:
