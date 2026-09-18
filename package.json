@@ -13,8 +13,6 @@
     "seed:scale": "tsx src/cli.ts seed",
     "seed": "tsx src/cli.ts seed",
     "validate": "tsx src/cli.ts validate",
-    "benchmark": "tsx src/cli.ts benchmark",
-    "inspect": "tsx src/cli.ts inspect",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "test:integration": "tsx --test test/integration/*.test.ts"

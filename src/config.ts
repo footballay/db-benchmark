@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 
-/** 실행 위치와 무관하게 benchmark 내부 경로와 재현 가능한 설정을 사용한다. */
+/** 실행 위치와 무관하게 프로젝트 경로와 재현 가능한 generator 설정을 사용한다. */
 export const root = fileURLToPath(new URL('../', import.meta.url));
 if (existsSync(resolve(root, '.env'))) process.loadEnvFile(resolve(root, '.env'));
 export const migrationDir = resolve(root, '../footballay-core/src/main/resources/db/migration');

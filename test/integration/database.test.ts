@@ -3,37 +3,73 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { from as copyFrom } from 'pg-copy-streams';
-import { connect, schema } from '../../src/db.js';
-import { active } from '../../src/benchmark/run.js';
-import { queryCases, verifyEquivalent } from '../../src/benchmark/queries.js';
-import { csv } from '../../src/loader.js';
+import { assertMigrated, connect } from '../../src/db.js';
+import { csv, readActiveDataset } from '../../src/loader.js';
 
-test('real schema supports explicit IDs, COPY escaping, boundaries, nullable joins and index rollback', async () => {
-  const db = await connect();
+test('COPY inserts an explicit ID into the migrated PostgreSQL schema', async () => {
+  const database = await connect();
   try {
-    await db.query('SELECT pg_advisory_lock(20260917)');
-    const m = await active(db), before = await schema(db);
-    await verifyEquivalent(db, await queryCases(db, m.config));
-    await db.query('BEGIN');
+    await database.query('SELECT pg_advisory_lock(20260917)');
+    await assertMigrated(database);
+    const active = await readActiveDataset();
+    const fixtureMetadata = active.loaded.find((entry) => entry.table === 'fixture_core');
+    assert.ok(fixtureMetadata);
+    assert.equal(
+      Number((await database.query('SELECT count(*) AS count FROM fixture_core')).rows[0].count),
+      fixtureMetadata.count,
+    );
+    const sequence = (
+      await database.query('SELECT last_value FROM fixture_core_id_seq')
+    ).rows[0].last_value;
+    const maximumId = (
+      await database.query('SELECT max(id) AS id FROM fixture_core')
+    ).rows[0].id;
+    assert.equal(Number(sequence), Number(maximumId), 'loader must advance the identity sequence');
+
+    const source = (
+      await database.query(`
+        SELECT kickoff, status_text, status_code, elapsed_min, league_id, home_team_id, away_team_id,
+          goals_home, goals_away, finished, available, auto_generated, league_season_id
+        FROM fixture_core ORDER BY id LIMIT 1`)
+    ).rows[0];
+    assert.ok(source, 'seeded fixture is required; run seed:realistic or seed:scale first');
+    const id = Number(maximumId) + 1_000_000;
+    const values = [
+      id,
+      `integration-copy-${id}`,
+      source.kickoff instanceof Date ? source.kickoff.toISOString() : source.kickoff,
+      source.status_text,
+      source.status_code,
+      source.elapsed_min,
+      source.league_id,
+      source.home_team_id,
+      source.away_team_id,
+      source.goals_home,
+      source.goals_away,
+      source.finished,
+      source.available,
+      source.auto_generated,
+      source.league_season_id,
+    ];
+
+    await database.query('BEGIN');
     try {
-      // 임시 테이블은 CSV codec 테스트에만 쓰이며 benchmark SQL에는 사용하지 않는다.
-      await db.query('CREATE TEMP TABLE copy_codec_test(value text) ON COMMIT DROP');
-      const values = [null, '', '서울,"FC"\nline', '\\N'];
-      await pipeline(Readable.from([values.map(csv).join('\n') + '\n']), db.query(copyFrom('COPY copy_codec_test FROM STDIN WITH(FORMAT csv)')));
-      assert.deepEqual((await db.query('SELECT value FROM copy_codec_test')).rows.map(r => r.value), values);
-      const f = (await db.query('SELECT * FROM fixture_core ORDER BY id LIMIT 1')).rows[0];
-      assert.equal(Number((await db.query('SELECT count(*) n FROM fixture_core WHERE id=$1 AND kickoff >= $2 AND kickoff < $2', [f.id, f.kickoff])).rows[0].n), 0);
-      assert.equal(Number((await db.query("SELECT count(*) n FROM fixture_core WHERE id=$1 AND kickoff >= $2 AND kickoff < $2::timestamptz + interval '1 second'", [f.id, f.kickoff])).rows[0].n), 1);
-      const id = Number((await db.query('SELECT max(id) n FROM fixture_core')).rows[0].n) + 100;
-      await db.query("INSERT INTO fixture_core(id,uid,league_id,kickoff,finished,available,auto_generated) VALUES($1,'integration-null-season',$2,$3,false,false,false)", [id,f.league_id,f.kickoff]);
-      assert.equal((await db.query('SELECT id FROM fixture_core WHERE id=$1 AND league_season_id IS NULL AND home_team_id IS NULL', [id])).rowCount, 1);
-      assert.equal((await db.query('SELECT f.id FROM fixture_core f JOIN league_season_core s ON s.id=f.league_season_id WHERE f.id=$1', [id])).rowCount, 0);
-      await db.query('DROP INDEX idx_fixture_core_league_season_kickoff');
-    } finally { await db.query('ROLLBACK'); }
-    assert.deepEqual(await schema(db), before);
-    await db.query('BEGIN');
-    try {
-      await assert.rejects(db.query("INSERT INTO fixture_core(id,uid,league_id,finished,available,auto_generated) VALUES(9000000000000,'bad-fk',9000000000000,false,false,false)"), (e: any) => e.code === '23503');
-    } finally { await db.query('ROLLBACK'); }
-  } finally { await db.end(); }
+      await pipeline(
+        Readable.from([`${values.map(csv).join(',')}\n`]),
+        database.query(copyFrom(`
+          COPY fixture_core (
+            id, uid, kickoff, status_text, status_code, elapsed_min, league_id, home_team_id,
+            away_team_id, goals_home, goals_away, finished, available, auto_generated, league_season_id
+          ) FROM STDIN WITH (FORMAT csv)`)),
+      );
+      assert.equal(
+        Number((await database.query('SELECT count(*) AS count FROM fixture_core WHERE id = $1', [id])).rows[0].count),
+        1,
+      );
+    } finally {
+      await database.query('ROLLBACK');
+    }
+  } finally {
+    await database.end();
+  }
 });

@@ -7,7 +7,6 @@ import { rows, tables } from '../src/generator/tables.js';
 import { matches } from '../src/presets/matches.js';
 import { expected } from '../src/validation.js';
 import { csv } from '../src/loader.js';
-import { flatten } from '../src/benchmark/run.js';
 
 test('round robin gives each directed pair exactly once and one match per team per round', () => {
   const schedule = roundRobin(20);
@@ -73,8 +72,4 @@ test('CSV keeps NULL distinct from empty strings and quotes arbitrary text', () 
   assert.equal(csv(null), ''); assert.equal(csv(''), '""');
   assert.equal(csv('서울,"FC"\nline'), '"서울,""FC""\nline"');
   assert.equal(csv(false), 'false');
-});
-test('plan flattening preserves loops and buffers without adding descendants', () => {
-  const nodes = flatten({ 'Node Type': 'Nested Loop', 'Shared Hit Blocks': 10, Plans: [{ 'Node Type': 'Index Scan', 'Actual Rows': 3, 'Actual Loops': 10, 'Shared Hit Blocks': 8 }] });
-  assert.equal(nodes[0]['Shared Hit Blocks'], 10); assert.equal(nodes[1]['Actual Loops'], 10);
 });

@@ -1,59 +1,155 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import type pg from 'pg';
-import { type Config, root, fixtureCount } from './config.js';
+import { type Config, fixtureCount } from './config.js';
 import { fixtures } from './generator/schedule.js';
-import { matches } from './presets/matches.js';
 import { tables } from './generator/tables.js';
 import type { Loaded } from './loader.js';
+import { matches } from './presets/matches.js';
 
-/** FK만으로 보장되지 않는 도메인 관계와 예상 행 수를 SQL로 검증한다. */
-export function expected(c: Config): Record<string, number> {
-  let detailed = 0, events = 0;
-  for (const f of fixtures(c)) if (f.detail) { detailed++; events += matches[f.preset].events.length; }
-  const l = c.leagueCount, t = l * c.teamsPerLeague, p = t * c.playersPerTeam, s = l * c.seasonsPerLeague, f = fixtureCount(c);
-  return { league_core: l, league_apisports: l, team_core: t, team_apisports: t, venue_apisports: t, league_team_core: t,
-    player_core: p, player_apisports: p, team_player_core: p, league_season_core: s, league_apisports_season: s,
-    fixture_core: f, fixture_api_sports: f, fixture_match_collect_state: f, apisports_match_team: f * 2,
-    apisports_match_team_stat: detailed * 2, apisports_match_player: detailed * 36, apisports_match_player_stat: detailed * 28,
-    apisports_match_team_xg: detailed * 6, apisports_match_event: events };
-}
-const quote = (s: string) => '"' + s.replaceAll('"', '""') + '"';
-export async function validate(client: pg.Client, c: Config, loaded?: Loaded[]) {
-  const counts = expected(c), checks: Record<string, number> = {};
-  const check = async (name: string, sql: string) => {
-    const n = Number((await client.query(sql)).rows[0].violations);
-    checks[name] = n;
-    if (n !== 0) throw new Error(`Validation ${name}: ${n} violations`);
+export function expected(config: Config): Record<string, number> {
+  let detailed = 0;
+  let events = 0;
+  for (const fixture of fixtures(config)) {
+    if (fixture.detail) {
+      detailed++;
+      events += matches[fixture.preset].events.length;
+    }
+  }
+  const leagues = config.leagueCount;
+  const teams = leagues * config.teamsPerLeague;
+  const players = teams * config.playersPerTeam;
+  const seasons = leagues * config.seasonsPerLeague;
+  const fixtureTotal = fixtureCount(config);
+  return {
+    league_core: leagues,
+    league_apisports: leagues,
+    team_core: teams,
+    team_apisports: teams,
+    venue_apisports: teams,
+    league_team_core: teams,
+    player_core: players,
+    player_apisports: players,
+    team_player_core: players,
+    league_season_core: seasons,
+    league_apisports_season: seasons,
+    fixture_core: fixtureTotal,
+    fixture_api_sports: fixtureTotal,
+    fixture_match_collect_state: fixtureTotal,
+    apisports_match_team: fixtureTotal * 2,
+    apisports_match_team_stat: detailed * 2,
+    apisports_match_player: detailed * 36,
+    apisports_match_player_stat: detailed * 28,
+    apisports_match_team_xg: detailed * 6,
+    apisports_match_event: events,
   };
+}
+
+const quote = (identifier: string) => `"${identifier.replaceAll('"', '""')}"`;
+
+export async function validate(client: pg.Client, config: Config, loaded?: Loaded[]) {
+  const counts = expected(config);
   for (const table of tables) {
-    const actual = Number((await client.query(`SELECT count(*) AS n FROM ${table}`)).rows[0].n);
-    if (actual !== counts[table] || (loaded && loaded.find(r => r.table === table)?.count !== actual))
+    const actual = Number((await client.query(`SELECT count(*) AS count FROM ${table}`)).rows[0].count);
+    const copied = loaded?.find((entry) => entry.table === table)?.count;
+    if (actual !== counts[table] || (copied !== undefined && copied !== actual)) {
       throw new Error(`${table}: expected ${counts[table]}, actual ${actual}`);
+    }
   }
-  const sql = await readFile(resolve(root, 'sql/validate.sql'), 'utf8');
-  for (const part of sql.split('-- CHECK ').slice(1)) {
-    const line = part.indexOf('\n');
-    await check(part.slice(0, line).trim(), part.slice(line + 1));
+
+  const checks: Record<string, string> = {
+    fixture_relationships: `
+      SELECT count(*) AS violations
+      FROM fixture_core f
+      LEFT JOIN league_season_core s ON s.id = f.league_season_id
+      LEFT JOIN league_team_core home_team
+        ON home_team.league_core_id = f.league_id AND home_team.team_core_id = f.home_team_id
+      LEFT JOIN league_team_core away_team
+        ON away_team.league_core_id = f.league_id AND away_team.team_core_id = f.away_team_id
+      WHERE s.id IS NULL OR s.league_core_id IS DISTINCT FROM f.league_id
+        OR home_team.id IS NULL OR away_team.id IS NULL OR f.home_team_id = f.away_team_id
+        OR f.kickoff IS NULL OR f.kickoff::date < s.season_start OR f.kickoff::date > s.season_end`,
+    backbone_relationships: `
+      SELECT count(*) AS violations
+      FROM fixture_api_sports api
+      LEFT JOIN fixture_core core ON core.id = api.fixture_core_id
+      LEFT JOIN league_apisports_season season ON season.id = api.season_id
+      LEFT JOIN league_apisports league ON league.id = season.league_apisports_id
+      LEFT JOIN apisports_match_team home_match ON home_match.id = api.home_team_id
+      LEFT JOIN apisports_match_team away_match ON away_match.id = api.away_team_id
+      LEFT JOIN team_apisports home_team ON home_team.id = home_match.team_apisports_id
+      LEFT JOIN team_apisports away_team ON away_team.id = away_match.team_apisports_id
+      WHERE core.id IS NULL OR season.id IS NULL OR league.id IS NULL
+        OR home_match.id IS NULL OR away_match.id IS NULL
+        OR home_team.team_core_id IS DISTINCT FROM core.home_team_id
+        OR away_team.team_core_id IS DISTINCT FROM core.away_team_id
+        OR season.league_season_core_id IS DISTINCT FROM core.league_season_id
+        OR league.league_core_id IS DISTINCT FROM core.league_id`,
+    teams_per_league: `
+      SELECT count(*) AS violations FROM (
+        SELECT league.id FROM league_core league
+        LEFT JOIN league_team_core team ON team.league_core_id = league.id
+        GROUP BY league.id HAVING count(team.id) <> ${config.teamsPerLeague}
+      ) invalid`,
+    players_per_team: `
+      SELECT count(*) AS violations FROM (
+        SELECT team.id FROM team_core team
+        LEFT JOIN team_player_core player ON player.team_core_id = team.id
+        GROUP BY team.id HAVING count(player.id) <> ${config.playersPerTeam}
+      ) invalid`,
+    fixtures_per_season: `
+      SELECT count(*) AS violations FROM (
+        SELECT season.id FROM league_season_core season
+        LEFT JOIN fixture_core fixture ON fixture.league_season_id = season.id
+        GROUP BY season.id
+        HAVING count(fixture.id) <> ${config.teamsPerLeague * (config.teamsPerLeague - 1) * config.scheduleCycleFactor}
+      ) invalid`,
+    round_robin: `
+      SELECT count(*) AS violations FROM (
+        SELECT league_season_id, home_team_id, away_team_id
+        FROM fixture_core GROUP BY 1, 2, 3
+        HAVING count(*) <> ${config.scheduleCycleFactor}
+      ) invalid`,
+  };
+
+  for (const [name, sql] of Object.entries(checks)) {
+    const violations = Number((await client.query(sql)).rows[0].violations);
+    if (violations !== 0) throw new Error(`Validation ${name}: ${violations} violations`);
   }
-  for (const [name, sql] of Object.entries({
-    teams_per_league: `SELECT count(*) violations FROM (SELECT l.id FROM league_core l LEFT JOIN league_team_core t ON t.league_core_id=l.id GROUP BY l.id HAVING count(t.id)<>${c.teamsPerLeague}) x`,
-    players_per_team: `SELECT count(*) violations FROM (SELECT t.id FROM team_core t LEFT JOIN team_player_core p ON p.team_core_id=t.id GROUP BY t.id HAVING count(p.id)<>${c.playersPerTeam}) x`,
-    seasons_per_league: `SELECT count(*) violations FROM (SELECT l.id FROM league_core l LEFT JOIN league_season_core s ON s.league_core_id=l.id GROUP BY l.id HAVING count(s.id)<>${c.seasonsPerLeague}) x`,
-    round_robin: `SELECT count(*) violations FROM (SELECT league_season_id,home_team_id,away_team_id FROM fixture_core GROUP BY 1,2,3 HAVING count(*)<>${c.scheduleCycleFactor}) x`,
-    fixtures_per_season: `SELECT count(*) violations FROM (SELECT s.id FROM league_season_core s LEFT JOIN fixture_core f ON f.league_season_id=s.id GROUP BY s.id HAVING count(f.id)<>${c.teamsPerLeague * (c.teamsPerLeague - 1) * c.scheduleCycleFactor}) x`,
-  })) await check(name, sql);
-  const fks = (await client.query(`SELECT c.conname,c.conrelid::regclass::text AS child,c.confrelid::regclass::text AS parent,c.convalidated,
-    array_agg(a.attname::text ORDER BY k.ord) AS child_cols,array_agg(b.attname::text ORDER BY k.ord) AS parent_cols
-    FROM pg_constraint c CROSS JOIN LATERAL unnest(c.conkey,c.confkey) WITH ORDINALITY k(ca,pa,ord)
-    JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.ca
-    JOIN pg_attribute b ON b.attrelid=c.confrelid AND b.attnum=k.pa
-    WHERE c.contype='f' AND c.connamespace='public'::regnamespace GROUP BY c.oid`)).rows;
-  for (const fk of fks) {
-    if (!fk.convalidated) throw new Error(`Unvalidated FK: ${fk.conname}`);
-    const child = fk.child_cols as string[], parent = fk.parent_cols as string[];
-    await check(`fk:${fk.conname}`, `SELECT count(*) violations FROM ${quote(fk.child)} c WHERE ${child.map(x => `c.${quote(x)} IS NOT NULL`).join(' AND ')} AND NOT EXISTS(SELECT 1 FROM ${quote(fk.parent)} p WHERE ${child.map((x, i) => `c.${quote(x)}=p.${quote(parent[i])}`).join(' AND ')})`);
+
+  const foreignKeys = (
+    await client.query(`
+      SELECT constraint_row.conname,
+        constraint_row.conrelid::regclass::text AS child,
+        constraint_row.confrelid::regclass::text AS parent,
+        constraint_row.convalidated,
+        array_agg(child_column.attname::text ORDER BY key_column.ordinality) AS child_columns,
+        array_agg(parent_column.attname::text ORDER BY key_column.ordinality) AS parent_columns
+      FROM pg_constraint constraint_row
+      CROSS JOIN LATERAL unnest(constraint_row.conkey, constraint_row.confkey)
+        WITH ORDINALITY key_column(child_number, parent_number, ordinality)
+      JOIN pg_attribute child_column
+        ON child_column.attrelid = constraint_row.conrelid AND child_column.attnum = key_column.child_number
+      JOIN pg_attribute parent_column
+        ON parent_column.attrelid = constraint_row.confrelid AND parent_column.attnum = key_column.parent_number
+      WHERE constraint_row.contype = 'f' AND constraint_row.connamespace = 'public'::regnamespace
+      GROUP BY constraint_row.oid`)
+  ).rows;
+
+  for (const foreignKey of foreignKeys) {
+    if (!foreignKey.convalidated) throw new Error(`Unvalidated FK: ${foreignKey.conname}`);
+    const childColumns = foreignKey.child_columns as string[];
+    const parentColumns = foreignKey.parent_columns as string[];
+    const result = await client.query(`
+      SELECT count(*) AS violations FROM ${quote(foreignKey.child)} child
+      WHERE ${childColumns.map((column) => `child.${quote(column)} IS NOT NULL`).join(' AND ')}
+        AND NOT EXISTS (
+          SELECT 1 FROM ${quote(foreignKey.parent)} parent
+          WHERE ${childColumns.map((column, index) =>
+            `child.${quote(column)} = parent.${quote(parentColumns[index])}`).join(' AND ')}
+        )`);
+    const violations = Number(result.rows[0].violations);
+    if (violations !== 0) throw new Error(`Validation fk:${foreignKey.conname}: ${violations} violations`);
   }
-  console.log(`Validation passed: ${tables.length} row counts, ${Object.keys(checks).length} relationship checks`);
-  return { counts, checks };
+
+  console.log(`Validation passed: ${tables.length} row counts, ${Object.keys(checks).length} generator relationships, ${foreignKeys.length} foreign keys`);
+  return { counts };
 }
