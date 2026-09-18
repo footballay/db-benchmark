@@ -1,6 +1,25 @@
 # Footballay PostgreSQL benchmark
 
-`footballay-core`의 Flyway 스키마에서 legacy League 조회와 season-aware 조회를 비교하는 독립 TypeScript 프로젝트입니다. 원본 저장소는 수정하지 않습니다. JPA·Python·row-by-row bulk INSERT를 사용하지 않습니다.
+Footballay의 실제 PostgreSQL 쿼리와 인덱스를 대규모 재현 데이터에서 측정하여, 개선 전후의 실행계획·데이터 접근량·buffer 사용·latency·scaling 차이를 검증하고 근거 자료로 축적하는 독립 TypeScript 프로젝트입니다. 원본 저장소는 수정하지 않습니다. JPA·Python·row-by-row bulk INSERT를 사용하지 않습니다.
+
+## 목적과 suite
+
+이 프로젝트는 단순한 쿼리 실행시간 비교가 아니라, 문제 query/index 구조와 개선 후보를 동일 데이터에서 재현하고 선택 근거를 남기는 범용 DB performance benchmark 환경입니다. 각 suite는 다음 자료를 남깁니다.
+
+1. 문제 query/index와 개선 후보.
+2. 동일 dataset의 전후 결과 집합 비교.
+3. `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` 원본과 실행계획.
+4. 접근 행 수, filter 제거 행, buffer, latency, dataset 규모별 scaling.
+5. 최종적으로 선택한 query/index 설계와 그 근거.
+
+현재 구현된 첫 번째 suite는 **Fixture / LeagueSeason**입니다. 이 suite는 legacy와 season-aware Fixture schedule query를 비교하고, 현재 season index의 predicate 적합성, index 제거 시 plan 변화, dataset 규모 증가 시 scaling을 검증합니다. Fixture/LeagueSeason은 프로젝트 전체 목적을 제한하지 않습니다.
+
+향후 같은 runner·dataset manifest·결과 저장 계약 위에 다음 suite를 추가합니다.
+
+- Fixture schedule 및 Available Fixture query.
+- MatchCollect candidate/reconcile query.
+- Match, lineup, statistics, event query.
+- 기타 Repository query와 후보 index 실험.
 
 ## 준비와 실행
 
@@ -72,7 +91,7 @@ npm run seed:scale -- --preset leagues-100k --leagueCount 12 --seasonsPerLeague 
 
 시즌 증가/cycle 증가 preset은 planner용 인위적 분포입니다. 현실적인 리그 구조와 구분해 해석하십시오. 같은 팀·선수 pool을 여러 시즌 재사용하며 이적·승강·선수 노화는 모델링하지 않습니다.
 
-## 쿼리와 결과
+## Fixture / LeagueSeason suite
 
 ```sh
 npm run benchmark -- --families core,public --ranges 1day,7day,30day,season,multi-season,all --repeats 5
@@ -89,7 +108,7 @@ npm run inspect
 
 `results/<preset>/seed-<timestamp>/manifest.json`은 설정·테이블 행 수/해시·원본 commit/migration SHA256·스키마·환경을 보관합니다. `results/active.json`은 현재 DB dataset을 가리킵니다. 결과 파일을 보존한 채 DB만 외부에서 교체하지 마십시오.
 
-`results/<preset>/run-<timestamp>/`에는 SQL/매개변수를 포함한 manifest, 모든 EXPLAIN JSON/TXT, metrics.json, summary.md가 저장됩니다. 파일명은 variant·query·range·반복 번호를 포함합니다. TXT는 JSON plan에서 만든 노드별 표현이며 별도 재실행한 EXPLAIN이 아닙니다.
+`results/<preset>/run-<timestamp>/`에는 SQL/매개변수를 포함한 manifest, 모든 EXPLAIN JSON/TXT, metrics.json, summary.md가 저장됩니다. 파일명은 variant·query·range·반복 번호를 포함합니다. TXT는 JSON plan에서 만든 노드별 표현이며 별도 재실행한 EXPLAIN이 아닙니다. `summary.md`는 사람이 읽는 요약이고 raw JSON과 EXPLAIN JSON이 분석의 source of truth입니다.
 
 첫 실행은 cold cache 측정이 아닙니다. 검증·ANALYZE·다른 쿼리가 캐시에 영향을 줍니다. 각 쿼리는 unnamed parameterized SQL이며 JDBC prepared statement의 generic plan 전환이나 Hibernate 전체 응답 시간을 재현하지 않습니다. `EXPLAIN ANALYZE`의 서버 실행 시간과 plan/buffer scaling을 비교합니다.
 
@@ -108,4 +127,4 @@ npm run test:integration
 
 전체 1m benchmark는 대량 COPY, FK 검증, 반복 EXPLAIN을 포함하므로 저장장치/메모리에 따라 시간이 걸립니다. 상세 통계를 전부 만들면 Fixture 수보다 Match Player 행 수가 훨씬 많아집니다. 전용 DB에서 실행하고 baseline 도중 설정이나 통계를 바꾸지 마십시오.
 
-설계 근거는 [schema-analysis.md](docs/schema-analysis.md), 측정 해석은 [benchmark-methodology.md](docs/benchmark-methodology.md)에 있습니다. 새 Git repository는 이 디렉터리를 루트로 초기화하면 됩니다. 결과는 기본 Git 제외이며 공유할 summary/manifest는 선별하여 추가하십시오.
+Fixture 첫 suite의 스키마 근거는 [schema-analysis.md](docs/schema-analysis.md), 전체 측정·확장 원칙은 [benchmark-methodology.md](docs/benchmark-methodology.md)에 있습니다. 결과는 기본 Git 제외이며 공유할 summary/manifest는 선별하여 추가하십시오.

@@ -1,4 +1,6 @@
-# 원본 스키마 분석
+# Fixture / LeagueSeason 첫 suite의 원본 스키마 분석
+
+이 문서는 범용 benchmark 환경의 첫 번째 case study인 Fixture / LeagueSeason suite에 한정합니다. 전체 프로젝트의 목적과 다른 suite의 확장 원칙은 [benchmark-methodology.md](benchmark-methodology.md)를 따릅니다.
 
 초기 조사 commit: `9c99557d1d03eff1d82337e96f0168a2746b33e8`.
 source of truth: `../../footballay-core/src/main/resources/db/migration` V1~V11, Kotlin persistence entity와 repository. 설명 문서나 JPA schema generation으로 구조를 추정하지 않습니다. 실행 시 실제 catalog와 migration hash를 별도 기록합니다. production의 수동 DDL 여부는 알 수 없습니다.

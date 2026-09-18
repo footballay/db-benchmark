@@ -5,7 +5,10 @@ import { root, type Config } from '../config.js';
 import { uid } from '../generator/schedule.js';
 
 export interface QueryCase { name: string; family: string; range: string; model: string; sql: string; params: (string | number)[] }
-/** JPQL projection과 fetch join을 유지하고 League 연결 경로만 변경한다. */
+/**
+ * 첫 번째 Fixture / LeagueSeason suite의 query definition이다.
+ * generic runner는 이후 Available Fixture, MatchCollect, Match/Statistics suite도 같은 QueryCase 계약으로 실행한다.
+ */
 export async function queryCases(client: pg.Client, c: Config, onlyRanges?: string[], onlyFamilies?: string[]): Promise<QueryCase[]> {
   const template = await readFile(resolve(root, 'sql/benchmark/fixture-range.sql'), 'utf8');
   const global = await readFile(resolve(root, 'sql/benchmark/match-collect.sql'), 'utf8');
