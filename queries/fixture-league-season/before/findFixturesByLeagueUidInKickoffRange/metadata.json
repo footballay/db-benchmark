@@ -1,0 +1,5 @@
+{
+  "repositoryClass" : "com.footballay.core.infra.persistence.core.repository.FixtureCoreRepository",
+  "repositoryMethod" : "findFixturesByLeagueUidInKickoffRange",
+  "coreGitCommit" : "9c99557d1d03eff1d82337e96f0168a2746b33e8"
+}

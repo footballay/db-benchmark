@@ -1,0 +1,1 @@
+select fc1_0.id,fc1_0.auto_generated,fc1_0.available,fc1_0.away_team_id,fc1_0.elapsed_min,fc1_0.finished,fc1_0.goals_away,fc1_0.goals_home,fc1_0.home_team_id,fc1_0.kickoff,fc1_0.league_id,fc1_0.league_season_id,fc1_0.status_code,fc1_0.status_text,fc1_0.uid from fixture_core fc1_0 where fc1_0.league_id=? and fc1_0.kickoff>=? and fc1_0.kickoff<? order by fc1_0.kickoff

@@ -1,0 +1,25 @@
+[ {
+  "name" : "matchCollect",
+  "example" : "FINISHED"
+}, {
+  "name" : "kickoffFromInclusive",
+  "example" : "2026-01-01T00:00:00Z"
+}, {
+  "name" : "kickoffToExclusive",
+  "example" : "2026-02-01T00:00:00Z"
+}, {
+  "name" : "excludedStatuses[0]",
+  "example" : "SUCCESS"
+}, {
+  "name" : "excludedStatuses[1]",
+  "example" : "NOT_PLAYED"
+}, {
+  "name" : "excludedStatuses[2]",
+  "example" : "DATA_INCOMPLETE_NEEDS_ADMIN"
+}, {
+  "name" : "excludedStatuses[3]",
+  "example" : "FAIL_END"
+}, {
+  "name" : "pageable.pageSize",
+  "example" : 100
+} ]

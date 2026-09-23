@@ -3,6 +3,7 @@ import { config } from './config.js';
 import { clearActiveDataset, compose, connect, sourceManifest } from './db.js';
 import { load, readActiveDataset } from './loader.js';
 import { validate } from './validation.js';
+import { benchmarkFixtureLeagueSeasonBefore } from './fixture-league-season-before.js';
 
 const generatorOptions = [
   'preset',
@@ -27,6 +28,15 @@ async function main() {
 
   if (command === 'db:up') return compose('up', '-d', '--wait', 'postgres');
   if (command === 'db:down') return compose('down');
+  if (command === 'benchmark:fixture-league-season:before') {
+    const client = await connect();
+    try {
+      await benchmarkFixtureLeagueSeasonBefore(client);
+    } finally {
+      await client.end();
+    }
+    return;
+  }
   if (command === 'db:migrate') {
     await sourceManifest();
     compose('run', '--rm', 'flyway', 'migrate');
@@ -44,7 +54,7 @@ async function main() {
     return;
   }
   if (!['seed', 'validate'].includes(command ?? '')) {
-    throw new Error('Commands: db:up db:down db:migrate db:reset seed validate');
+    throw new Error('Commands: db:up db:down db:migrate db:reset seed validate benchmark:fixture-league-season:before');
   }
 
   const client = await connect();

@@ -66,6 +66,16 @@ seed는 다음 순서로 동작한다.
 npm run db:reset -- --confirm footballay-benchmark
 ```
 
+## Query benchmark
+
+`fixture-league-season` before suite는 `footballay-core`에서 캡처한 Hibernate SQL을 seeded PostgreSQL 데이터베이스에서 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`으로 실행한다.
+
+```sh
+npm run benchmark:fixture-league-season:before
+```
+
+실행 결과는 `results/fixture-league-season/before/<repository-method>/` 아래의 실제 파라미터와 EXPLAIN JSON으로 저장된다.
+
 ## Preset
 
 `realistic`은 5개 리그, 리그당 20개 팀, 팀당 25명, 리그당 10개 시즌으로 구성된다. 모든 경기에 상세 Match Data를 생성하며 Fixture는 19,000개다.
