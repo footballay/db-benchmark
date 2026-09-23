@@ -14,6 +14,7 @@
     "seed": "tsx src/cli.ts seed",
     "validate": "tsx src/cli.ts validate",
     "benchmark:fixture-league-season:before": "tsx src/cli.ts benchmark:fixture-league-season:before",
+    "benchmark:fixture-league-season:after": "tsx src/cli.ts benchmark:fixture-league-season:after",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "test:integration": "tsx --test test/integration/*.test.ts"

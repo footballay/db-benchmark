@@ -1,0 +1,5 @@
+[
+  { "name": "leagueUid", "example": "capture-league" },
+  { "name": "startInclusive", "example": "2026-01-01T00:00:00Z" },
+  { "name": "endExclusive", "example": "2026-02-01T00:00:00Z" }
+]

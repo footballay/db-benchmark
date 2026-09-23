@@ -1,0 +1,12 @@
+[
+  { "name": "leagueUid.currentSeason", "example": "capture-league" },
+  { "name": "leagueUid.legacy", "example": "capture-league" },
+  { "name": "statuses[0]", "example": "PENDING" },
+  { "name": "statuses[1]", "example": "EARLY_SYNCED" },
+  { "name": "statuses[2]", "example": "SUCCESS" },
+  { "name": "statuses[3]", "example": "NOT_PLAYED" },
+  { "name": "statuses[4]", "example": "DATA_INCOMPLETE_NEEDS_ADMIN" },
+  { "name": "statuses[5]", "example": "FAIL_END" },
+  { "name": "pageable.offset", "example": 50 },
+  { "name": "pageable.pageSize", "example": 50 }
+]

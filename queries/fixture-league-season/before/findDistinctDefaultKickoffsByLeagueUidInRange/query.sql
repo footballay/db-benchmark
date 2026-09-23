@@ -1,0 +1,1 @@
+select distinct fc1_0.kickoff from fixture_core fc1_0 join league_core l1_0 on l1_0.id=fc1_0.league_id where l1_0.uid=? and fc1_0.kickoff>=? and fc1_0.kickoff<? and not exists(select mbf1_0.id from mock_backbone_fixture mbf1_0 where mbf1_0.fixture_core_id=fc1_0.id)

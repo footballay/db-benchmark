@@ -1,0 +1,1 @@
+select max(fc1_0.kickoff) from fixture_core fc1_0 join fixture_api_sports as1_0 on fc1_0.id=as1_0.fixture_core_id join league_core l1_0 on l1_0.id=fc1_0.league_id where l1_0.uid=? and fc1_0.kickoff<?

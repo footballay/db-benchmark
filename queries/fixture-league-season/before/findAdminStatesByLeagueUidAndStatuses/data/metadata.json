@@ -1,0 +1,1 @@
+{"repositoryClass":"com.footballay.core.infra.persistence.core.repository.FixtureMatchCollectStateRepository","repositoryMethod":"findAdminStatesByLeagueUidAndStatuses:data","coreGitCommit":"30370f824b75f624454239cf4c3bde0340a3bb93"}

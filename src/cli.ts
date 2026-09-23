@@ -3,7 +3,7 @@ import { config } from './config.js';
 import { clearActiveDataset, compose, connect, sourceManifest } from './db.js';
 import { load, readActiveDataset } from './loader.js';
 import { validate } from './validation.js';
-import { benchmarkFixtureLeagueSeasonBefore } from './fixture-league-season-before.js';
+import { benchmarkFixtureLeagueSeasonAfter, benchmarkFixtureLeagueSeasonBefore } from './fixture-league-season-before.js';
 
 const generatorOptions = [
   'preset',
@@ -22,7 +22,7 @@ async function main() {
   const { values } = parseArgs({
     args: process.argv.slice(3),
     options: Object.fromEntries(
-      [...generatorOptions, 'confirm'].map((key) => [key, { type: 'string' as const }]),
+      [...generatorOptions, 'confirm', 'beforeRun'].map((key) => [key, { type: 'string' as const }]),
     ),
   });
 
@@ -32,6 +32,15 @@ async function main() {
     const client = await connect();
     try {
       await benchmarkFixtureLeagueSeasonBefore(client);
+    } finally {
+      await client.end();
+    }
+    return;
+  }
+  if (command === 'benchmark:fixture-league-season:after') {
+    const client = await connect();
+    try {
+      await benchmarkFixtureLeagueSeasonAfter(client, values.beforeRun);
     } finally {
       await client.end();
     }
@@ -54,7 +63,7 @@ async function main() {
     return;
   }
   if (!['seed', 'validate'].includes(command ?? '')) {
-    throw new Error('Commands: db:up db:down db:migrate db:reset seed validate benchmark:fixture-league-season:before');
+    throw new Error('Commands: db:up db:down db:migrate db:reset seed validate benchmark:fixture-league-season:before benchmark:fixture-league-season:after');
   }
 
   const client = await connect();
